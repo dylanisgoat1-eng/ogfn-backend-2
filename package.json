@@ -1,21 +1,13 @@
 {
-  "name": "galaxy-launcher",
-  "version": "1.0.0",
-  "main": "main.js",
-  "scripts": {
-    "start": "electron .",
-    "server": "node server.js"
-  },
-  "dependencies": {
-    "axios": "^1.16.1",
-    "cors": "^2.8.6",
-    "express": "^4.22.2",
-    "firebase-admin": "^12.7.0",
-    "jsonwebtoken": "^9.0.3"
-  },
-  "devDependencies": {
-    "electron": "^31.0.0"
-  },
-  "license": "ISC",
-  "type": "commonjs"
+  "type": "service_account",
+  "project_id": "your-project-id",
+  "private_key_id": "randomkeyid123",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nREPLACE_WITH_REAL_KEY\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-xxxxx@your-project-id.iam.gserviceaccount.com",
+  "client_id": "12345678901234567890",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-xxxxx%40your-project-id.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
 }
