@@ -3,41 +3,59 @@ const axios = require("axios");
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
 const fs = require("fs");
-
-// =====================
-// FIREBASE ADMIN
-// =====================
 const admin = require("firebase-admin");
-const serviceAccount = require("./serviceAccountKey.json");
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 // =====================
-// CONFIG
+// ROOT (Render check)
 // =====================
-const CLIENT_ID = "1505369355331047455";
-const CLIENT_SECRET = "CYlNATa1Obtc0_j5J1yiSuduzs9iLVbb";
+app.get("/", (req, res) => {
+  res.send("Backend is running");
+});
 
-const REDIRECT_URI = "http://localhost:3000/callback";
-const JWT_SECRET = "qwertyuiopasdfghjklzxcvbnm1234567890";
+// =====================
+// FIREBASE SAFE INIT
+// =====================
+let firebaseReady = false;
 
+if (process.env.FIREBASE_KEY) {
+  try {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
+
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+
+    firebaseReady = true;
+    console.log("Firebase connected");
+  } catch (err) {
+    console.log("Firebase error:", err.message);
+  }
+}
+
+// =====================
+// ENV CONFIG
+// =====================
+const CLIENT_ID = process.env.CLIENT_ID;
+const CLIENT_SECRET = process.env.CLIENT_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET;
+const REDIRECT_URI = process.env.REDIRECT_URI;
+
+// =====================
+// SIMPLE FILE DB
+// =====================
 const DB_FILE = "./accounts.json";
 
-// =====================
-// DB FUNCTIONS
-// =====================
 function loadDB() {
   try {
-    if (!fs.existsSync(DB_FILE)) return {};
+    if (!fs.existsSync(DB_FILE)) {
+      fs.writeFileSync(DB_FILE, "{}");
+    }
     return JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
-  } catch (err) {
-    console.log("DB load error:", err.message);
+  } catch {
     return {};
   }
 }
@@ -46,7 +64,7 @@ function saveDB(db) {
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
   } catch (err) {
-    console.log("DB save error:", err.message);
+    console.log("DB error:", err.message);
   }
 }
 
@@ -69,11 +87,9 @@ app.get("/login", (req, res) => {
 // =====================
 app.get("/callback", async (req, res) => {
   const code = req.query.code;
-
   if (!code) return res.send("No code provided");
 
   try {
-    // get discord token
     const tokenRes = await axios.post(
       "https://discord.com/api/oauth2/token",
       new URLSearchParams({
@@ -83,78 +99,57 @@ app.get("/callback", async (req, res) => {
         code,
         redirect_uri: REDIRECT_URI,
       }),
-      {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-      }
+      { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
     );
 
     const access_token = tokenRes.data.access_token;
 
-    // get user
     const userRes = await axios.get("https://discord.com/api/users/@me", {
-      headers: {
-        Authorization: `Bearer ${access_token}`,
-      },
+      headers: { Authorization: `Bearer ${access_token}` },
     });
 
     const user = userRes.data;
 
-    // create JWT
     const launcherToken = jwt.sign(
       {
         id: user.id,
         username: user.username,
-        avatar: user.avatar,
       },
       JWT_SECRET,
       { expiresIn: "30d" }
     );
 
-    // save local DB
+    // SAVE LOCAL DB
     const db = loadDB();
-
     db[user.id] = {
       id: user.id,
       username: user.username,
-      avatar: user.avatar,
       token: launcherToken,
       lastLogin: Date.now(),
     };
-
     saveDB(db);
 
-    // save Firebase (safe try)
-    try {
+    // SAVE FIREBASE (if enabled)
+    if (firebaseReady) {
       await admin.firestore().collection("accounts").doc(user.id).set({
         id: user.id,
         username: user.username,
-        avatar: user.avatar,
         token: launcherToken,
         lastLogin: Date.now(),
       });
-    } catch (e) {
-      console.log("Firebase error:", e.message);
     }
 
-    // redirect to launcher
+    // RETURN TO LAUNCHER
     res.send(`
       <script>
         const token = "${launcherToken}";
-
         localStorage.setItem("ogfn_token", token);
-
         window.location.href = "ogfn://login?token=" + token;
-
-        setTimeout(() => {
-          window.location.href = "http://localhost:3000/fallback?token=" + token;
-        }, 2000);
       </script>
     `);
 
   } catch (err) {
-    console.log(err.response?.data || err.message);
+    console.log(err.message);
     res.send("Login failed");
   }
 });
@@ -172,32 +167,10 @@ app.get("/verify", (req, res) => {
 });
 
 // =====================
-// ACCOUNTS ROUTE
-// =====================
-app.get("/accounts", (req, res) => {
-  const db = loadDB();
-  res.json(db);
-});
-
-// =====================
-// FALLBACK ROUTE
-// =====================
-app.get("/fallback", (req, res) => {
-  res.send(`
-    <h2>Login complete</h2>
-    <p>You can now close this page and open the launcher.</p>
-    <script>
-      localStorage.setItem("ogfn_token", "${req.query.token}");
-    </script>
-  `);
-});
-
-// =====================
 // START SERVER
 // =====================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log("SERVER STARTING...");
-  console.log("Running on port " + PORT);
+  console.log("Server running on port", PORT);
 });
